@@ -63,8 +63,13 @@ class RNNEncoder(EncoderBase):
         "See :obj:`EncoderBase.forward()`"
         self._check_args(src, lengths)
 
+        #print src
+        import pdb        
+        #pdb.set_trace()
+        
         emb = self.embeddings(src)
         # s_len, batch, emb_dim = emb.size()
+        #pdb.set_trace()
 
         packed_emb = emb
         if lengths is not None and not self.no_pack_padded_seq:

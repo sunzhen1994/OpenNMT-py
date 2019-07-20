@@ -4,6 +4,7 @@ from __future__ import unicode_literals, print_function
 import torch
 from onmt.inputters.text_dataset import TextMultiField
 
+import time
 
 class TranslationBuilder(object):
     """
@@ -65,7 +66,10 @@ class TranslationBuilder(object):
                     key=lambda x: x[-1])))
 
         # Sorting
+        #import pdb
+        #pdb.set_trace()
         inds, perm = torch.sort(batch.indices)
+        #pdb.set_trace()
         if self._has_text_src:
             src = batch.src[0][:, :, 0].index_select(1, perm)
         else:
@@ -101,6 +105,8 @@ class TranslationBuilder(object):
             )
             translations.append(translation)
 
+
+        time.sleep(1)
         return translations
 
 

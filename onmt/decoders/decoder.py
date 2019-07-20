@@ -156,7 +156,8 @@ class RNNDecoderBase(DecoderBase):
     def detach_state(self):
         self.state["hidden"] = tuple(h.detach() for h in self.state["hidden"])
         self.state["input_feed"] = self.state["input_feed"].detach()
-
+        
+        
     def forward(self, tgt, memory_bank, memory_lengths=None, step=None):
         """
         Args:
@@ -173,10 +174,15 @@ class RNNDecoderBase(DecoderBase):
                 * attns: distribution over src at each tgt
                         `[tgt_len x batch x src_len]`.
         """
+
+            
+        #pdb.set_trace()
         dec_state, dec_outs, attns = self._run_forward_pass(
             tgt, memory_bank, memory_lengths=memory_lengths)
-
+        #pdb.set_trace()
         # Update the state with the result.
+
+
         if not isinstance(dec_state, tuple):
             dec_state = (dec_state,)
         self.state["hidden"] = dec_state
@@ -184,6 +190,8 @@ class RNNDecoderBase(DecoderBase):
         self.state["coverage"] = None
         if "coverage" in attns:
             self.state["coverage"] = attns["coverage"][-1].unsqueeze(0)
+
+
 
         # Concatenates sequence of tensors along a new dimension.
         # NOTE: v0.3 to 0.4: dec_outs / attns[*] may not be list
@@ -196,6 +204,8 @@ class RNNDecoderBase(DecoderBase):
             for k in attns:
                 if type(attns[k]) == list:
                     attns[k] = torch.stack(attns[k])
+
+
         # TODO change the way attns is returned dict => list or tuple (onnx)
         return dec_outs, attns
 
@@ -236,11 +246,12 @@ class StdRNNDecoder(RNNDecoderBase):
                             type of attention Tensor array of every time
                             step from the decoder.
         """
+        
         assert self.copy_attn is None  # TODO, no support yet.
-        assert not self._coverage  # TODO, no support yet.
-
-        attns = {}
-        emb = self.embeddings(tgt)
+        assert not self._coverage  # TODO, no support yet.                
+        
+        attns = {}                       
+        emb = self.embeddings(tgt)        
 
         if isinstance(self.rnn, nn.GRU):
             rnn_output, dec_state = self.rnn(emb, self.state["hidden"][0])
@@ -313,7 +324,8 @@ class InputFeedRNNDecoder(RNNDecoderBase):
         """
         See StdRNNDecoder._run_forward_pass() for description
         of arguments and return values.
-        """
+        """        
+
         # Additional args check.
         input_feed = self.state["input_feed"].squeeze(0)
         input_feed_batch, _ = input_feed.size()
@@ -321,6 +333,7 @@ class InputFeedRNNDecoder(RNNDecoderBase):
         aeq(tgt_batch, input_feed_batch)
         # END Additional args check.
 
+        
         dec_outs = []
         attns = {"std": []}
         if self.copy_attn is not None or self._reuse_copy_attn:
@@ -328,12 +341,15 @@ class InputFeedRNNDecoder(RNNDecoderBase):
         if self._coverage:
             attns["coverage"] = []
 
+
         emb = self.embeddings(tgt)
+
         assert emb.dim() == 3  # len x batch x embedding_dim
 
         dec_state = self.state["hidden"]
         coverage = self.state["coverage"].squeeze(0) \
             if self.state["coverage"] is not None else None
+
 
         # Input feed concatenates hidden state with
         # input at every time step.

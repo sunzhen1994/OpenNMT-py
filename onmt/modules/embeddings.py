@@ -129,6 +129,7 @@ class Embeddings(nn.Module):
         emb_dims.extend(feat_dims)
         pad_indices.extend(feat_padding_idx)
 
+        
         # The embedding matrix look-up tables. The first look-up table
         # is for words. Subsequent ones are for features, if any exist.
         emb_params = zip(vocab_sizes, emb_dims, pad_indices)
@@ -230,6 +231,10 @@ class Embeddings(nn.Module):
         Return:
             `FloatTensor`: word embeddings `[len x batch x embedding_size]`
         """
+        import pdb
+
+        #pdb.set_trace()
+        
         if self.position_encoding:
             for i, module in enumerate(self.make_embedding._modules.values()):
                 if i == len(self.make_embedding._modules.values()) - 1:
@@ -237,6 +242,10 @@ class Embeddings(nn.Module):
                 else:
                     source = module(source)
         else:
+            #pdb.set_trace()
             source = self.make_embedding(source)
+            #pdb.set_trace()
+
+        #pdb.set_trace()
 
         return source

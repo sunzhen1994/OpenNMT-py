@@ -29,6 +29,7 @@ def build_embeddings(opt, text_field, for_encoder=True):
     emb_dim = opt.src_word_vec_size if for_encoder else opt.tgt_word_vec_size
 
     pad_indices = [f.vocab.stoi[f.pad_token] for _, f in text_field]
+        
     word_padding_idx, feat_pad_indices = pad_indices[0], pad_indices[1:]
 
     num_embs = [len(f.vocab) for _, f in text_field]
@@ -76,8 +77,9 @@ def build_decoder(opt, embeddings):
                else opt.decoder_type
     return str2dec[dec_type].from_opt(opt, embeddings)
 
+import pdb
 
-def load_test_model(opt, dummy_opt, model_path=None):
+def load_test_model(opt, dummy_opt, model_path=None):    
     if model_path is None:
         model_path = opt.models[0]
     checkpoint = torch.load(model_path,

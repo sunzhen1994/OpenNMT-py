@@ -19,7 +19,7 @@ from onmt.translate.beam_search import BeamSearch
 from onmt.translate.random_sampling import RandomSampling
 from onmt.utils.misc import tile, set_random_seed
 from onmt.modules.copy_generator import collapse_copy_scores
-
+import pdb
 
 def build_translator(opt, report_score=True, logger=None, out_file=None):
     if out_file is None:
@@ -31,8 +31,8 @@ def build_translator(opt, report_score=True, logger=None, out_file=None):
 
     load_test_model = onmt.decoders.ensemble.load_test_model \
         if len(opt.models) > 1 else onmt.model_builder.load_test_model
-    fields, model, model_opt = load_test_model(opt, dummy_opt.__dict__)
-
+    fields, model, model_opt = load_test_model(opt, dummy_opt.__dict__)    
+    
     scorer = onmt.translate.GNMTGlobalScorer.from_opt(opt)
 
     translator = Translator(
@@ -79,6 +79,14 @@ class Translator(object):
         self.fields = fields
         tgt_field = self.fields["tgt"][0][1].base_field
         self._tgt_vocab = tgt_field.vocab
+
+
+        with open('word_index.txt', 'r') as f:
+            lines = f.readlines()            
+            self.word_index = int(lines[0])
+
+        
+        #pdb.set_trace()
         self._tgt_eos_idx = self._tgt_vocab.stoi[tgt_field.eos_token]
         self._tgt_pad_idx = self._tgt_vocab.stoi[tgt_field.pad_token]
         self._tgt_bos_idx = self._tgt_vocab.stoi[tgt_field.init_token]
@@ -218,11 +226,17 @@ class Translator(object):
 
         start_time = time.time()
 
-        for batch in data_iter:
+        
+
+        
+        for batch in data_iter:            
+            #pdb.set_trace()
             batch_data = self.translate_batch(
                 batch, data.src_vocabs, attn_debug
             )
+            #pdb.set_trace()
             translations = xlation_builder.from_batch(batch_data)
+            #pdb.set_trace()
 
             for trans in translations:
                 all_scores += [trans.pred_scores[:self.n_best]]
@@ -238,7 +252,7 @@ class Translator(object):
                 self.out_file.write('\n'.join(n_best_preds) + '\n')
                 self.out_file.flush()
 
-                if self.verbose:
+                if self.verbose:                    
                     sent_number = next(counter)
                     output = trans.log(sent_number)
                     if self.logger:
@@ -308,6 +322,7 @@ class Translator(object):
             keep_topk=-1,
             return_attention=False):
         """Alternative to beam search. Do random sampling at each step."""
+                   
 
         assert self.beam_size == 1
 
@@ -317,8 +332,11 @@ class Translator(object):
         batch_size = batch.batch_size
 
         # Encoder forward.
+        #pdb.set_trace()
         src, enc_states, memory_bank, src_lengths = self._run_encoder(batch)
+        #pdb.set_trace()
         self.model.decoder.init_state(src, memory_bank, enc_states)
+        
 
         use_src_map = self.copy_attn
 
@@ -345,22 +363,38 @@ class Translator(object):
             self._exclusion_idxs, return_attention, self.max_length,
             sampling_temp, keep_topk, memory_lengths)
 
-        for step in range(max_length):
-            # Shape: (1, B, 1)
-            decoder_input = random_sampler.alive_seq[:, -1].view(1, -1, 1)
 
-            log_probs, attn = self._decode_and_generate(
-                decoder_input,
-                memory_bank,
-                batch,
-                src_vocabs,
-                memory_lengths=memory_lengths,
-                src_map=src_map,
-                step=step,
-                batch_offset=random_sampler.select_indices
-            )
-
-            random_sampler.advance(log_probs, attn)
+        NSETS = 64
+        NACCESSES = 10
+        count = 0
+        for step in range(max_length):            
+            for sets_idx in range(NSETS):
+                with open('/dev/shm/sync', 'w') as sync_file:
+                    print(str(sets_idx), file=sync_file)
+                with open('index.txt', 'r') as index_file:
+                    for index_i, index_line in enumerate(index_file):
+                        if index_i == sets_idx:
+                            self.word_index = int(index_line)
+                            break
+                for access_num in range(NACCESSES):                    
+                    # Shape: (1, B, 1)
+                    #print(sets_idx)
+                    #print(access_num)
+                    #print(count)
+                    #count += 1
+                    
+                    decoder_input = random_sampler.alive_seq[:, -1].view(1, -1, 1)
+                    log_probs, attn = self._decode_and_generate(
+                        decoder_input,
+                        memory_bank,
+                        batch,
+                        src_vocabs,
+                        memory_lengths=memory_lengths,
+                        src_map=src_map,
+                        step=step,
+                        batch_offset=random_sampler.select_indices
+                    )                        
+                    random_sampler.advance(log_probs, attn)                    
 
         random_sampler.update_finished()
         results["scores"] = random_sampler.scores
@@ -371,6 +405,7 @@ class Translator(object):
     def translate_batch(self, batch, src_vocabs, attn_debug):
         """Translate a batch of sentences."""
         with torch.no_grad():
+            #pdb.set_trace()
             if self.beam_size == 1:
                 return self._translate_random_sampling(
                     batch,
@@ -381,6 +416,7 @@ class Translator(object):
                     keep_topk=self.sample_from_topk,
                     return_attention=attn_debug or self.replace_unk)
             else:
+                #pdb.set_trace()
                 return self._translate_batch(
                     batch,
                     src_vocabs,
@@ -420,14 +456,53 @@ class Translator(object):
                 decoder_in.gt(self._tgt_vocab_len - 1), self._tgt_unk_idx
             )
 
+
+        
+        #src_field = self.fields["src"][0][1].base_field
+        #_src_vocab = src_field.vocab
+        
+        
+        decoder_in = torch.Tensor([[[self.word_index]]]).long()        
+        
+
+        '''
+        #print(decoder_in)
+        for i in decoder_in.tolist()[0]:
+            #print(len(self._tgt_vocab.itos))
+            #print(i[0])
+            #with open('yelp_words.txt', 'a') as out_file:
+                #print(self._tgt_vocab.itos[i[0]], file=out_file)
+                #utf_str = unicode(self._tgt_vocab.itos[i[0]] + '\n').encode('utf8')
+                #out_file.write(utf_str)
+            print(self._tgt_vocab.itos[i[0]])
+            #print()
+        '''
+            
+        '''
+        #for i in range(0, len(self._tgt_vocab.itos)):
+        
+        with open('cs_tgt.txt', 'wb') as out_file:        
+            for i in range(0, len(self._tgt_vocab.itos)):
+                #print(str(i) + ' ' + self._tgt_vocab.itos[i])
+                #print(self._tgt_vocab.itos[i])
+                utf_str = unicode(self._tgt_vocab.itos[i] + '\n').encode('utf8')
+                out_file.write(utf_str)
+        '''
+        
         # Decoder forward, takes [tgt_len, batch, nfeats] as input
         # and [src_len, batch, hidden] as memory_bank
         # in case of inference tgt_len = 1, batch = beam times batch_size
         # in case of Gold Scoring tgt_len = actual length, batch = 1 batch
+        #pdb.set_trace()
+
+
+        #print('0')
         dec_out, dec_attn = self.model.decoder(
             decoder_in, memory_bank, memory_lengths=memory_lengths, step=step
         )
-
+        #pdb.set_trace()
+        #print('1')
+        
         # Generator forward.
         if not self.copy_attn:
             attn = dec_attn["std"]
@@ -456,6 +531,7 @@ class Translator(object):
             log_probs = scores.squeeze(0).log()
             # returns [(batch_size x beam_size) , vocab ] when 1 step
             # or [ tgt_len, batch_size, vocab ] when full sentence
+        
         return log_probs, attn
 
     def _translate_batch(
